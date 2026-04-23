@@ -1,88 +1,60 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../../../services/api';
 import AuthButton from '../../atoms/buttons/AuthButton/AuthButton';
 import LoginInput from '../../atoms/inputs/AuthInputs/LoginInput';
 import PasswordInput from '../../atoms/inputs/AuthInputs/PasswordInput';
-import { useNavigate } from 'react-router-dom';
 
 const LoginForm = () => {
     const [login, setLogin] = useState('');
     const [password, setPassword] = useState('');
-    const [errors, setErrors] = useState({
-        login: '',
-        password: ''
-    });
+    const [errors, setErrors] = useState({ login: '', password: '' });
+    const [serverError, setServerError] = useState('');
+    const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
-    const validateForm = () => {
-        const newErrors = {
-            login: '',
-            password: ''
-        };
-        let isValid = true;
-
-        if (!login.trim()) {
-            newErrors.login = 'Введите логин';
-            isValid = false;
-        } else if (login.length < 3) {
-            newErrors.login = 'Логин слишком короткий';
-            isValid = false;
-        }
-
-        if (!password.trim()) {
-            newErrors.password = 'Введите пароль';
-            isValid = false;
-        } else if (password.length < 6) {
-            newErrors.password = 'Пароль слишком короткий';
-            isValid = false;
-        }
-
+    const validate = () => {
+        let valid = true;
+        const newErrors = { login: '', password: '' };
+        if (!login.trim()) { newErrors.login = 'Введите логин'; valid = false; }
+        else if (login.length < 3) { newErrors.login = 'Логин слишком короткий'; valid = false; }
+        if (!password.trim()) { newErrors.password = 'Введите пароль'; valid = false; }
+        else if (password.length < 6) { newErrors.password = 'Пароль слишком короткий'; valid = false; }
         setErrors(newErrors);
-        return isValid;
+        return valid;
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        if (validateForm()) {
-            // Здесь должна быть логика авторизации
-            console.log('Вход:', { login, password });
-            // Перенаправление после успешной авторизации
+        if (!validate()) return;
+        setLoading(true);
+        setServerError('');
+        try {
+            const data = await api.login(login, password);
+            // Сохраняем токен (хоть он и фейковый) и данные пользователя
+            localStorage.setItem('access_token', data.access_token);
+            localStorage.setItem('user', JSON.stringify(data.user));
             navigate('/main');
+        } catch (err: any) {
+            setServerError(err.message || 'Ошибка входа');
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
         <form className="w-full max-w-md" onSubmit={handleSubmit}>
             <div className="mb-6">
-                <label htmlFor="login" className="block font-kalam mb-3 text-center text-lg font-medium text-gray-900">
-                    Login
-                </label>
-                <LoginInput
-                    value={login}
-                    onChange={(e) => setLogin(e.target.value)}
-                    hasError={!!errors.login}
-                />
-                {errors.login && (
-                    <p className="mt-1 text-center text-sm text-red-600 font-kalam">
-                        {errors.login}
-                    </p>
-                )}
+                <label className="block font-kalam mb-3 text-center text-lg">Login</label>
+                <LoginInput value={login} onChange={(e) => setLogin(e.target.value)} hasError={!!errors.login} />
+                {errors.login && <p className="text-red-600 text-sm text-center">{errors.login}</p>}
             </div>
             <div className="mb-12">
-                <label htmlFor="password" className="block font-kalam mb-3 text-center text-lg font-medium text-gray-900">
-                    Password
-                </label>
-                <PasswordInput
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    hasError={!!errors.password}
-                />
-                {errors.password && (
-                    <p className="mt-1 text-center text-sm text-red-600 font-kalam">
-                        {errors.password}
-                    </p>
-                )}
+                <label className="block font-kalam mb-3 text-center text-lg">Password</label>
+                <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} hasError={!!errors.password} />
+                {errors.password && <p className="text-red-600 text-sm text-center">{errors.password}</p>}
             </div>
+            {serverError && <div className="text-red-600 text-center mb-4">{serverError}</div>}
             <div className="text-center">
                 <AuthButton type="submit" />
             </div>

@@ -1,5 +1,6 @@
 import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import {BrowserRouter, Routes, Route, Navigate} from "react-router-dom";
+import { AuthProvider, useAuth } from '../context/AuthContext/AuthContext';
 import RegistrationSuccess from "../components/modals/registrationSuccess/RegistrationSuccess";
 import BookingDetails from "../components/molecules/bookingDetails/BookingDetails";
 import EditBooking from "../components/molecules/bookingDetails/EditBooking";
@@ -14,8 +15,15 @@ import SecondPage from "../components/pages/SecondPage/SecondPage";
 import ThirdPage from "../components/pages/ThirdPage/ThirdPage";
 import MultiCheckOut from "../components/organisms/CheckOutGuest/MultiCheckOut";
 
+
+const PrivateRoute = ({ children }: { children: JSX.Element }) => {
+	const { isAuthenticated } = useAuth();
+	return isAuthenticated ? children : <Navigate to="/auth" />;
+};
+
 const MainRouter = () => {
 	return (
+		<AuthProvider>
 		<BrowserRouter>
 			<Routes>
 				<Route path='/' element={<HomePage />} />
@@ -33,6 +41,7 @@ const MainRouter = () => {
 				<Route path="/mass-checkout" element={<MultiCheckOut />} />
 			</Routes>
 		</BrowserRouter>
+		</AuthProvider>
 	);
 };
 
