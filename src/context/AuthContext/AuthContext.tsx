@@ -6,6 +6,10 @@ interface User {
     first_name: string;
     last_name: string;
     role: string;
+    email?: string;          // добавить
+    phone?: string;          // добавить
+    birth_date?: string;     // добавить
+    avatar?: string;         // добавить
 }
 
 interface AuthContextType {
