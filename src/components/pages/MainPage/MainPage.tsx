@@ -7,12 +7,28 @@ import { useAuth } from '../../../context/AuthContext/AuthContext';
 
 const MainPage = () => {
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [avatar, setAvatar] = useState(defaultAvatar);
     const profileRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
     const { user, logout } = useAuth();
 
-    // Аватар из контекста (если есть) или заглушка
-    const avatar = user?.avatar || defaultAvatar;
+    // Обновляем аватар при изменении user
+    useEffect(() => {
+        if (user?.avatar) {
+            setAvatar(user.avatar);
+        } else {
+            // Проверяем localStorage на случай, если user ещё не загружен
+            const storedUser = localStorage.getItem('user');
+            if (storedUser) {
+                const parsedUser = JSON.parse(storedUser);
+                if (parsedUser.avatar) {
+                    setAvatar(parsedUser.avatar);
+                    return;
+                }
+            }
+            setAvatar(defaultAvatar);
+        }
+    }, [user]);
 
     const handleProfileClick = () => {
         setIsProfileOpen(!isProfileOpen);
@@ -21,6 +37,7 @@ const MainPage = () => {
     const handleLogout = () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
+        logout();
         navigate('/auth');
     };
 
