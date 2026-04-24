@@ -38,7 +38,7 @@ const MainPage = () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
         logout();
-        navigate('/auth');
+        navigate('/');
     };
 
     const handleProfileNavigate = () => {
