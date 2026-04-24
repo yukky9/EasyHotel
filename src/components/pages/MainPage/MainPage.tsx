@@ -9,7 +9,7 @@ const MainPage = () => {
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const profileRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
 
     // Аватар из контекста (если есть) или заглушка
     const avatar = user?.avatar || defaultAvatar;
@@ -19,10 +19,9 @@ const MainPage = () => {
     };
 
     const handleLogout = () => {
-        // Полный выход: очистить localStorage
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
-        navigate('/');
+        navigate('/auth');
     };
 
     const handleProfileNavigate = () => {

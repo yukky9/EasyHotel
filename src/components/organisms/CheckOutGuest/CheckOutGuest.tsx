@@ -1,72 +1,80 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { api, Booking, Guest, Room } from '../../../services/api';
 
-interface Guest {
-    id: string;
+interface CheckoutGuest {
+    id: number;
     name: string;
     roomNumber: string;
     roomType: string;
     checkInDate: string;
     checkOutDate: string;
+    bookingId: number;
+    roomId: number;
     isChecked?: boolean;
 }
 
 const GuestCheckout = () => {
     const { bookingId } = useParams();
     const navigate = useNavigate();
-    const [mode, setMode] = useState<'single' | 'multi'>(bookingId ? 'single' : 'multi');
+    const mode: 'single' | 'multi' = bookingId ? 'single' : 'multi';
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
-    const [guests, setGuests] = useState<Guest[]>([]);
+    const [guests, setGuests] = useState<CheckoutGuest[]>([]);
     const [notes, setNotes] = useState('');
 
-    // Загрузка данных
     useEffect(() => {
         const fetchGuests = async () => {
             try {
                 setLoading(true);
-                // Моковые данные - заменить на API-запрос
-                const mockData: Guest[] = [
-                    {
-                        id: '1',
-                        name: 'Иванов Иван',
-                        roomNumber: '101',
-                        roomType: 'Стандарт',
-                        checkInDate: '2023-06-15',
-                        checkOutDate: '2023-06-20'
-                    },
-                    {
-                        id: '2',
-                        name: 'Петрова Мария',
-                        roomNumber: '205',
-                        roomType: 'Люкс',
-                        checkInDate: '2023-06-18',
-                        checkOutDate: '2023-06-25'
-                    },
-                    {
-                        id: '3',
-                        name: 'Сидоров Алексей',
-                        roomNumber: '102',
-                        roomType: 'Стандарт',
-                        checkInDate: '2023-06-10',
-                        checkOutDate: '2023-06-12'
-                    }
-                ];
 
                 if (mode === 'single' && bookingId) {
-                    const singleGuest = mockData.find(g => g.id === bookingId);
-                    if (singleGuest) {
-                        setGuests([singleGuest]);
-                    } else {
-                        setError('Гость не найден');
-                    }
+                    const booking = await api.getBooking(Number(bookingId));
+                    const guest = await api.getGuest(booking.guest_id);
+                    const rooms = await api.getRooms();
+                    const room = rooms.find(r => r.id === booking.room_id);
+
+                    setGuests([{
+                        id: guest.id,
+                        name: `${guest.first_name} ${guest.last_name}`,
+                        roomNumber: room?.room_number || '—',
+                        roomType: booking.room_type || 'Стандарт',
+                        checkInDate: booking.check_in_date,
+                        checkOutDate: booking.check_out_date,
+                        bookingId: booking.id,
+                        roomId: booking.room_id,
+                        isChecked: true
+                    }]);
                 } else {
-                    setGuests(mockData.map(g => ({ ...g, isChecked: false })));
+                    const bookings = await api.getBookings();
+                    const confirmedBookings = bookings.filter(b =>
+                        b.status === 'confirmed'
+                    );
+
+                    const guestsData: CheckoutGuest[] = await Promise.all(
+                        confirmedBookings.map(async (b) => {
+                            const guest = await api.getGuest(b.guest_id);
+                            const rooms = await api.getRooms();
+                            const room = rooms.find(r => r.id === b.room_id);
+                            return {
+                                id: guest.id,
+                                name: `${guest.first_name} ${guest.last_name}`,
+                                roomNumber: room?.room_number || '—',
+                                roomType: b.room_type || 'Стандарт',
+                                checkInDate: b.check_in_date,
+                                checkOutDate: b.check_out_date,
+                                bookingId: b.id,
+                                roomId: b.room_id,
+                                isChecked: false
+                            };
+                        })
+                    );
+                    setGuests(guestsData);
                 }
             } catch (err) {
-                setError('Ошибка загрузки данных гостей');
+                setError('Ошибка загрузки данных');
                 console.error(err);
             } finally {
                 setLoading(false);
@@ -78,9 +86,9 @@ const GuestCheckout = () => {
 
     const selectedCount = guests.filter(g => g.isChecked).length;
 
-    const handleToggleGuest = (id: string) => {
-        setGuests(guests.map(guest =>
-            guest.id === id ? { ...guest, isChecked: !guest.isChecked } : guest
+    const handleToggleGuest = (index: number) => {
+        setGuests(guests.map((guest, i) =>
+            i === index ? { ...guest, isChecked: !guest.isChecked } : guest
         ));
     };
 
@@ -91,15 +99,19 @@ const GuestCheckout = () => {
 
     const handleCheckOut = async () => {
         const guestsToCheckout = mode === 'single'
-            ? [bookingId]
-            : guests.filter(g => g.isChecked).map(g => g.id);
+            ? guests.filter(g => g.isChecked)
+            : guests.filter(g => g.isChecked);
 
         if (guestsToCheckout.length === 0) {
             setError('Выберите хотя бы одного гостя');
             return;
         }
 
-        if (!window.confirm(`Подтверждаете выселение ${guestsToCheckout.length} ${guestsToCheckout.length === 1 ? 'гостя' : 'гостей'}?`)) {
+        const confirmMessage = mode === 'single'
+            ? 'Подтверждаете выселение гостя?'
+            : `Подтверждаете выселение ${guestsToCheckout.length} гостей?`;
+
+        if (!window.confirm(confirmMessage)) {
             return;
         }
 
@@ -107,12 +119,13 @@ const GuestCheckout = () => {
         setError('');
 
         try {
-            // Здесь должен быть реальный API-запрос
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            console.log('Выселение:', {
-                guestIds: guestsToCheckout,
-                notes: mode === 'single' ? notes : null
-            });
+            for (const guest of guestsToCheckout) {
+                // 1. Обновляем статус бронирования на "checked_out"
+                await api.checkoutBooking(guest.bookingId);
+
+                // 2. Обновляем статус комнаты на "available"
+                await api.updateRoomStatus(guest.roomId, 'available');
+            }
 
             setSuccess(true);
             setTimeout(() => navigate('/bookings'), 2000);
@@ -163,17 +176,8 @@ const GuestCheckout = () => {
                 </div>
 
                 {error && (
-                    <div className="bg-red-50 border-l-4 border-red-500 p-4">
-                        <div className="flex">
-                            <div className="flex-shrink-0">
-                                <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                </svg>
-                            </div>
-                            <div className="ml-3">
-                                <p className="text-sm text-red-700">{error}</p>
-                            </div>
-                        </div>
+                    <div className="bg-red-50 border-l-4 border-red-500 p-4 m-4">
+                        <p className="text-sm text-red-700">{error}</p>
                     </div>
                 )}
 
@@ -184,29 +188,29 @@ const GuestCheckout = () => {
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
                                     <tr>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 w-10">
                                             <input
                                                 type="checkbox"
                                                 checked={guests.length > 0 && guests.every(g => g.isChecked)}
                                                 onChange={handleToggleAll}
-                                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                                className="h-4 w-4 text-blue-600 rounded"
                                             />
                                         </th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Гость</th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Номер</th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Тип</th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дата выезда</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Гость</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Номер</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Тип</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Дата выезда</th>
                                     </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
-                                    {guests.map((guest) => (
-                                        <tr key={guest.id} className={guest.isChecked ? 'bg-blue-50' : undefined}>
+                                    {guests.map((guest, index) => (
+                                        <tr key={guest.bookingId} className={guest.isChecked ? 'bg-blue-50' : undefined}>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <input
                                                     type="checkbox"
                                                     checked={!!guest.isChecked}
-                                                    onChange={() => handleToggleGuest(guest.id)}
-                                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                                    onChange={() => handleToggleGuest(index)}
+                                                    className="h-4 w-4 text-blue-600 rounded"
                                                 />
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -253,15 +257,12 @@ const GuestCheckout = () => {
                                 </div>
 
                                 <div>
-                                    <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
-                                        Примечания
-                                    </label>
+                                    <label className="block text-sm font-medium text-gray-700">Примечания</label>
                                     <textarea
-                                        id="notes"
                                         rows={3}
                                         value={notes}
                                         onChange={(e) => setNotes(e.target.value)}
-                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        className="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                         placeholder="Дополнительная информация..."
                                     />
                                 </div>
@@ -274,32 +275,20 @@ const GuestCheckout = () => {
                     <button
                         onClick={() => navigate(-1)}
                         disabled={processing}
-                        className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                        className="px-4 py-2 border rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                     >
                         Назад
                     </button>
                     <button
                         onClick={handleCheckOut}
                         disabled={processing || (mode === 'multi' && selectedCount === 0)}
-                        className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                        className={`px-4 py-2 rounded-md text-white ${
                             processing || (mode === 'multi' && selectedCount === 0)
                                 ? 'bg-red-400 cursor-not-allowed'
                                 : 'bg-red-600 hover:bg-red-700'
-                        } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50`}
+                        }`}
                     >
-                        {processing ? (
-                            <>
-                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Обработка...
-                            </>
-                        ) : mode === 'single' ? (
-                            'Подтвердить выселение'
-                        ) : (
-                            `Выселить (${selectedCount})`
-                        )}
+                        {processing ? 'Обработка...' : (mode === 'single' ? 'Подтвердить выселение' : `Выселить (${selectedCount})`)}
                     </button>
                 </div>
             </div>
